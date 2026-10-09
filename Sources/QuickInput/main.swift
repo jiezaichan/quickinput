@@ -8,6 +8,9 @@
 
 import Cocoa
 
+// build.sh install 迁移旧 LaunchAgent 自启时带此参数启动
+if CommandLine.arguments.contains("--register-login-item") { LoginItem.set(true) }
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

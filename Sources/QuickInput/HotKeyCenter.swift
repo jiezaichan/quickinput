@@ -92,7 +92,36 @@ final class HotKeyCenter {
 		return true
 	}
 
+	// MARK: 授权框回车
+	//
+	// 授权框会锁住键盘焦点，别的窗口拿不到 ↩；但全局热键照样能收到（已实测）。
+	// 所以只在授权框出现期间把裸 ↩ 注册成热键，用完立刻注销，平时的回车不受影响。
+	// 单独存一个 ref，不进 refs，免得 reload() 把它注销掉。
+
+	private let authReturnID = UInt32.max
+	private var authReturnRef: EventHotKeyRef?
+
+	func armAuthReturn() {
+		guard authReturnRef == nil else { return }
+		installHandlerIfNeeded()
+		var ref: EventHotKeyRef?
+		let hkID = EventHotKeyID(signature: OSType(0x5354_464C), id: authReturnID)
+		if RegisterEventHotKey(UInt32(kVK_Return), 0, hkID, GetApplicationEventTarget(), 0, &ref) == noErr {
+			authReturnRef = ref
+		}
+	}
+
+	func disarmAuthReturn() {
+		guard let ref = authReturnRef else { return }
+		UnregisterEventHotKey(ref)
+		authReturnRef = nil
+	}
+
 	func handle(id: UInt32) {
+		if id == authReturnID {
+			AuthAssist.shared.fill()
+			return
+		}
 		if id == panelID {
 			SearchPanel.shared.toggle()
 			return

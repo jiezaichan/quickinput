@@ -1,48 +1,26 @@
 import Foundation
+import ServiceManagement
 
 // MARK: - 开机自启
 
+/// 走系统「登录项」（SMAppService），在 系统设置 → 通用 → 登录项 里可见、可关。
+/// 1.1 及以前是自己写 LaunchAgent plist（com.jiezaichan.quickinput），由 build.sh install 迁走。
 enum LoginItem {
-	/// 与 Info.plist 的 CFBundleIdentifier、build.sh 的 LABEL 保持一致
-	static let label = "com.jiezaichan.quickinput"
-
-	static var plistURL: URL {
-		FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
-			.appendingPathComponent("LaunchAgents", isDirectory: true)
-			.appendingPathComponent("\(label).plist")
-	}
-
-	static var enabled: Bool { FileManager.default.fileExists(atPath: plistURL.path) }
+	static var enabled: Bool { SMAppService.mainApp.status == .enabled }
 
 	static func set(_ on: Bool) {
-		if on {
-			guard let exe = Bundle.main.executablePath else { return }
-			let dict: [String: Any] = [
-				"Label": label,
-				"ProgramArguments": [exe],
-				"RunAtLoad": true,
-				"KeepAlive": false,
-				"ProcessType": "Interactive",
-			]
-			try? FileManager.default.createDirectory(at: plistURL.deletingLastPathComponent(),
-			                                         withIntermediateDirectories: true)
-			if let data = try? PropertyListSerialization.data(fromPropertyList: dict, format: .xml, options: 0) {
-				try? data.write(to: plistURL)
+		do {
+			if on {
+				try SMAppService.mainApp.register()
+			} else {
+				try SMAppService.mainApp.unregister()
 			}
-			launchctl(["bootstrap", "gui/\(getuid())", plistURL.path])
-		} else {
-			launchctl(["bootout", "gui/\(getuid())/\(label)"])
-			try? FileManager.default.removeItem(at: plistURL)
+		} catch {
+			NSLog("登录项\(on ? "注册" : "取消")失败：\(error)")
 		}
-	}
-
-	private static func launchctl(_ args: [String]) {
-		let p = Process()
-		p.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-		p.arguments = args
-		p.standardOutput = FileHandle.nullDevice
-		p.standardError = FileHandle.nullDevice
-		try? p.run()
-		p.waitUntilExit()
+		// 用户曾在系统设置里关掉过，register 后会停在待批准，只能让他去系统设置里打开
+		if on && SMAppService.mainApp.status == .requiresApproval {
+			SMAppService.openSystemSettingsLoginItems()
+		}
 	}
 }

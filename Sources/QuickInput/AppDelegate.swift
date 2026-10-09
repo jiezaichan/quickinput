@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 		Store.shared.load()
 		HotKeyCenter.shared.reload()
+		AuthAssist.shared.start()
 
 		statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 		if let button = statusItem.button {
@@ -51,6 +52,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 		                      keyEquivalent: "")
 		perm.target = self
 		menu.addItem(perm)
+
+		let pwd = NSMenuItem(title: AdminPassword.isSet ? "管理员密码：已设置（授权框旁一键填入）" : "管理员密码：未设置（点此设置）",
+		                     action: #selector(editAdminPassword),
+		                     keyEquivalent: "")
+		pwd.target = self
+		menu.addItem(pwd)
 
 		let panelHint = PanelHotKey.keyCode == nil ? "" : "    " + Keys.describe(keyCode: PanelHotKey.keyCode, modifiers: PanelHotKey.modifiers)
 		let search = NSMenuItem(title: "搜索片段…" + panelHint, action: #selector(openSearch), keyEquivalent: "")
@@ -113,6 +120,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 	@objc private func exportSnippets() {
 		Transfer.exportSnippets()
+	}
+
+	@objc private func editAdminPassword() {
+		let alert = NSAlert()
+		alert.messageText = "管理员密码"
+		alert.informativeText = "存进登录钥匙串，不随片段导出。系统授权框弹出时旁边会出现「填入密码」按钮，点一下自动输入并回车。"
+		let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+		field.placeholderString = "本机登录密码"
+		alert.accessoryView = field
+		alert.addButton(withTitle: "保存")
+		alert.addButton(withTitle: "取消")
+		if AdminPassword.isSet { alert.addButton(withTitle: "清除已存密码") }
+		alert.window.initialFirstResponder = field
+		NSApp.activate(ignoringOtherApps: true)
+
+		switch alert.runModal() {
+		case .alertFirstButtonReturn:
+			let pw = field.stringValue
+			guard AdminPassword.verify(pw) else {
+				let err = NSAlert()
+				err.messageText = "密码不对"
+				err.informativeText = "没有保存。请输入当前用户的登录密码。"
+				err.runModal()
+				return
+			}
+			_ = AdminPassword.save(pw)
+		case .alertThirdButtonReturn:
+			AdminPassword.clear()
+		default:
+			return
+		}
+		rebuildMenu()
 	}
 
 	@objc private func openAccessibilitySettings() {
