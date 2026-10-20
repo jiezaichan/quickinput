@@ -13,10 +13,6 @@ final class HotKeyRecorder: NSView {
 
 	override init(frame frameRect: NSRect) {
 		super.init(frame: frameRect)
-		wantsLayer = true
-		layer?.cornerRadius = 6
-		layer?.borderWidth = 1
-		layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
 		label.alignment = .center
 		label.translatesAutoresizingMaskIntoConstraints = false
 		addSubview(label)
@@ -39,7 +35,18 @@ final class HotKeyRecorder: NSView {
 		label.stringValue = recording ? "按下组合键…（esc 取消，⌫ 清除）"
 		                              : Keys.describe(keyCode: keyCode, modifiers: modifiers)
 		label.textColor = recording ? .secondaryLabelColor : .labelColor
-		layer?.borderColor = (recording ? NSColor.controlAccentColor : NSColor.separatorColor).cgColor
+		needsDisplay = true
+	}
+
+	/// 底色和边框在 draw 里画：系统动态色要在绘制时才按当前外观解析。
+	/// 以前在 init 里取 .cgColor 塞给 layer，那时还没拿到窗口外观，浅色模式下会解析成黑底。
+	override func draw(_ dirtyRect: NSRect) {
+		let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 6, yRadius: 6)
+		NSColor.textBackgroundColor.setFill()
+		path.fill()
+		(recording ? NSColor.controlAccentColor : NSColor.separatorColor).setStroke()
+		path.lineWidth = 1
+		path.stroke()
 	}
 
 	override func mouseDown(with event: NSEvent) {
