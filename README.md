@@ -2,6 +2,8 @@
 
 菜单栏文本片段工具：每条片段绑一个全局快捷键，按下即在当前光标处输入对应文本。纯 Swift + AppKit，不依赖 Xcode，只需要 Command Line Tools。
 
+![搜索面板](search-panel.png)
+
 ## 构建与安装
 
 ```bash
