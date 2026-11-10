@@ -13,7 +13,7 @@ final class SettingsWC: NSWindowController, NSTableViewDataSource, NSTableViewDe
 	private let panelRecorder = HotKeyRecorder(frame: .zero)
 	private let panelStatus = NSTextField(labelWithString: "")
 	private let scrollAlwaysSwitch = NSSwitch()
-	private let scrollCtrlSwitch = NSSwitch()
+	private let scrollKeyPopup = NSPopUpButton()
 	private let scrollFactorSlider = NSSlider()
 	private let scrollFactorLabel = NSTextField(labelWithString: "")
 	private let scrollStatus = NSTextField(labelWithString: "")
@@ -145,10 +145,11 @@ final class SettingsWC: NSWindowController, NSTableViewDataSource, NSTableViewDe
 		scrollAlwaysSwitch.controlSize = .small
 		scrollAlwaysSwitch.state = ScrollBoost.shared.alwaysOn ? .on : .off
 
-		scrollCtrlSwitch.target = self
-		scrollCtrlSwitch.action = #selector(toggleScrollCtrl)
-		scrollCtrlSwitch.controlSize = .small
-		scrollCtrlSwitch.state = ScrollBoost.shared.withLeftCtrl ? .on : .off
+		scrollKeyPopup.addItems(withTitles: BoostKey.allCases.map(\.title))
+		scrollKeyPopup.selectItem(at: BoostKey.allCases.firstIndex(of: ScrollBoost.shared.boostKey) ?? 0)
+		scrollKeyPopup.target = self
+		scrollKeyPopup.action = #selector(scrollKeyChanged)
+		size(scrollKeyPopup, width: 120, height: nil)
 
 		scrollFactorSlider.minValue = 1
 		scrollFactorSlider.maxValue = 15
@@ -168,9 +169,9 @@ final class SettingsWC: NSWindowController, NSTableViewDataSource, NSTableViewDe
 		let generalCard = group([
 			formRow("开机自动启动", nil, launchSwitch),
 			formRow("搜索面板", "全局呼出，按名称搜片段", hstack([panelStatus, panelRecorder], spacing: 8)),
-			formRow("一直加速", "不用按 Ctrl，所有滚动都加速",
+			formRow("一直加速", "不用按加速键，所有滚动都加速",
 			        hstack([scrollStatus, scrollAlwaysSwitch], spacing: 8)),
-			formRow("按住左 Ctrl 加速", "按住左侧 Ctrl 滚动时才加速", scrollCtrlSwitch),
+			formRow("加速键", "按住它滚动时才加速，只认选中那一侧", scrollKeyPopup),
 			formRow("加速倍率", "1–15 倍，触控板两指滚动不加速",
 			        hstack([scrollFactorSlider, scrollFactorLabel], spacing: 8)),
 		])
@@ -403,8 +404,8 @@ final class SettingsWC: NSWindowController, NSTableViewDataSource, NSTableViewDe
 		syncScrollUI()
 	}
 
-	@objc private func toggleScrollCtrl() {
-		ScrollBoost.shared.withLeftCtrl = scrollCtrlSwitch.state == .on
+	@objc private func scrollKeyChanged() {
+		ScrollBoost.shared.boostKey = BoostKey.allCases[max(scrollKeyPopup.indexOfSelectedItem, 0)]
 		syncScrollUI()
 	}
 
@@ -418,7 +419,7 @@ final class SettingsWC: NSWindowController, NSTableViewDataSource, NSTableViewDe
 	/// 打开窗口、切换开关后把滚轮相关控件刷成实际生效值
 	private func syncScrollUI() {
 		scrollAlwaysSwitch.state = ScrollBoost.shared.alwaysOn ? .on : .off
-		scrollCtrlSwitch.state = ScrollBoost.shared.withLeftCtrl ? .on : .off
+		scrollKeyPopup.selectItem(at: BoostKey.allCases.firstIndex(of: ScrollBoost.shared.boostKey) ?? 0)
 		scrollFactorSlider.doubleValue = ScrollBoost.shared.factor
 		scrollFactorLabel.stringValue = Self.factorText(ScrollBoost.shared.factor)
 		let on = ScrollBoost.shared.active
