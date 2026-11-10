@@ -6,6 +6,25 @@ import Carbon.HIToolbox
 enum Keys {
 	static let fKeys: Set<UInt32> = [122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111]
 
+	/// 鼠标键在 keyCode 里用 1000 + buttonNumber 表示（1003 下侧键后退、1004 上侧键前进）。
+	/// 键盘键码最大 126，不会撞。
+	static let mouseKeyBase: UInt32 = 1000
+
+	static func isMouseKey(_ code: UInt32?) -> Bool {
+		guard let code else { return false }
+		return code >= mouseKeyBase
+	}
+
+	static func mouseKey(_ button: Int64) -> UInt32 { mouseKeyBase + UInt32(button) }
+
+	static func mouseName(_ button: Int64) -> String {
+		switch button {
+		case 3: return "🖱后退"
+		case 4: return "🖱前进"
+		default: return "🖱键\(button)"
+		}
+	}
+
 	static let names: [UInt32: String] = [
 		0: "A", 11: "B", 8: "C", 2: "D", 14: "E", 3: "F", 5: "G", 4: "H",
 		34: "I", 38: "J", 40: "K", 37: "L", 46: "M", 45: "N", 31: "O", 35: "P",
@@ -28,7 +47,7 @@ enum Keys {
 		if modifiers & UInt32(optionKey) != 0 { s += "⌥" }
 		if modifiers & UInt32(shiftKey) != 0 { s += "⇧" }
 		if modifiers & UInt32(cmdKey) != 0 { s += "⌘" }
-		s += names[kc] ?? "键\(kc)"
+		s += isMouseKey(kc) ? mouseName(Int64(kc - mouseKeyBase)) : (names[kc] ?? "键\(kc)")
 		return s
 	}
 
@@ -39,5 +58,15 @@ enum Keys {
 		if flags.contains(.shift) { m |= UInt32(shiftKey) }
 		if flags.contains(.command) { m |= UInt32(cmdKey) }
 		return m
+	}
+
+	/// Carbon 修饰键 → CGEvent 修饰键，判断鼠标事件是否按着绑定时要求的修饰键
+	static func eventFlags(from carbon: UInt32) -> CGEventFlags {
+		var f: CGEventFlags = []
+		if carbon & UInt32(controlKey) != 0 { f.insert(.maskControl) }
+		if carbon & UInt32(optionKey) != 0 { f.insert(.maskAlternate) }
+		if carbon & UInt32(shiftKey) != 0 { f.insert(.maskShift) }
+		if carbon & UInt32(cmdKey) != 0 { f.insert(.maskCommand) }
+		return f
 	}
 }

@@ -12,17 +12,22 @@ final class SettingsWC: NSWindowController, NSTableViewDataSource, NSTableViewDe
 	private let launchSwitch = NSSwitch()
 	private let panelRecorder = HotKeyRecorder(frame: .zero)
 	private let panelStatus = NSTextField(labelWithString: "")
+	private let scrollAlwaysSwitch = NSSwitch()
+	private let scrollCtrlSwitch = NSSwitch()
+	private let scrollFactorSlider = NSSlider()
+	private let scrollFactorLabel = NSTextField(labelWithString: "")
+	private let scrollStatus = NSTextField(labelWithString: "")
 
 	/// 卡片内左右留白
 	private static let pad: CGFloat = 14
 
 	convenience init() {
-		let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 560),
+		let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 640),
 		                   styleMask: [.titled, .closable, .miniaturizable, .resizable],
 		                   backing: .buffered,
 		                   defer: false)
 		win.title = "速填 · 设置"
-		win.contentMinSize = NSSize(width: 700, height: 500)
+		win.contentMinSize = NSSize(width: 700, height: 580)
 		win.center()
 		self.init(window: win)
 		buildUI()
@@ -88,7 +93,7 @@ final class SettingsWC: NSWindowController, NSTableViewDataSource, NSTableViewDe
 
 		let snippetCard = group([
 			formRow("名称", nil, nameField),
-			formRow("快捷键", "点框录制 · esc 取消 · ⌫ 清除", recorder),
+			formRow("快捷键", "点框录制 · 支持鼠标侧键 · esc 取消 · ⌫ 清除", recorder),
 			formRow("输入后回车", "命令类片段打完字直接执行", enterSwitch),
 		])
 
@@ -135,9 +140,39 @@ final class SettingsWC: NSWindowController, NSTableViewDataSource, NSTableViewDe
 		panelStatus.font = .systemFont(ofSize: 11.5, weight: .medium)
 		panelStatus.textColor = .systemRed
 
+		scrollAlwaysSwitch.target = self
+		scrollAlwaysSwitch.action = #selector(toggleScrollAlways)
+		scrollAlwaysSwitch.controlSize = .small
+		scrollAlwaysSwitch.state = ScrollBoost.shared.alwaysOn ? .on : .off
+
+		scrollCtrlSwitch.target = self
+		scrollCtrlSwitch.action = #selector(toggleScrollCtrl)
+		scrollCtrlSwitch.controlSize = .small
+		scrollCtrlSwitch.state = ScrollBoost.shared.withLeftCtrl ? .on : .off
+
+		scrollFactorSlider.minValue = 1
+		scrollFactorSlider.maxValue = 15
+		scrollFactorSlider.doubleValue = ScrollBoost.shared.factor
+		scrollFactorSlider.isContinuous = true
+		scrollFactorSlider.target = self
+		scrollFactorSlider.action = #selector(scrollFactorChanged)
+		size(scrollFactorSlider, width: 150, height: nil)
+		scrollFactorLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+		scrollFactorLabel.textColor = .secondaryLabelColor
+		scrollFactorLabel.stringValue = Self.factorText(ScrollBoost.shared.factor)
+		size(scrollFactorLabel, width: 42, height: nil)
+
+		scrollStatus.font = .systemFont(ofSize: 11.5, weight: .medium)
+		scrollStatus.textColor = .systemRed
+
 		let generalCard = group([
 			formRow("开机自动启动", nil, launchSwitch),
 			formRow("搜索面板", "全局呼出，按名称搜片段", hstack([panelStatus, panelRecorder], spacing: 8)),
+			formRow("一直加速", "不用按 Ctrl，所有滚动都加速",
+			        hstack([scrollStatus, scrollAlwaysSwitch], spacing: 8)),
+			formRow("按住左 Ctrl 加速", "按住左侧 Ctrl 滚动时才加速", scrollCtrlSwitch),
+			formRow("加速倍率", "1–15 倍，触控板两指滚动不加速",
+			        hstack([scrollFactorSlider, scrollFactorLabel], spacing: 8)),
 		])
 
 		let right = vstack([
@@ -285,6 +320,7 @@ final class SettingsWC: NSWindowController, NSTableViewDataSource, NSTableViewDe
 	/// 片段被整体换掉（打开窗口、导入）后重画列表并选中第一条
 	func reloadFromStore() {
 		panelStatus.stringValue = HotKeyCenter.shared.panelFailed ? "被占用" : ""
+		syncScrollUI()
 		table.reloadData()
 		table.selectRowIndexes(Store.shared.snippets.isEmpty ? [] : [0], byExtendingSelection: false)
 		loadEditor()
@@ -361,6 +397,35 @@ final class SettingsWC: NSWindowController, NSTableViewDataSource, NSTableViewDe
 		LoginItem.set(launchSwitch.state == .on)
 		launchSwitch.state = LoginItem.enabled ? .on : .off
 	}
+
+	@objc private func toggleScrollAlways() {
+		ScrollBoost.shared.alwaysOn = scrollAlwaysSwitch.state == .on
+		syncScrollUI()
+	}
+
+	@objc private func toggleScrollCtrl() {
+		ScrollBoost.shared.withLeftCtrl = scrollCtrlSwitch.state == .on
+		syncScrollUI()
+	}
+
+	@objc private func scrollFactorChanged() {
+		// 加速是把一次滚动补发成 N 次，只有整数倍
+		let v = scrollFactorSlider.doubleValue.rounded()
+		ScrollBoost.shared.factor = v
+		scrollFactorLabel.stringValue = Self.factorText(v)
+	}
+
+	/// 打开窗口、切换开关后把滚轮相关控件刷成实际生效值
+	private func syncScrollUI() {
+		scrollAlwaysSwitch.state = ScrollBoost.shared.alwaysOn ? .on : .off
+		scrollCtrlSwitch.state = ScrollBoost.shared.withLeftCtrl ? .on : .off
+		scrollFactorSlider.doubleValue = ScrollBoost.shared.factor
+		scrollFactorLabel.stringValue = Self.factorText(ScrollBoost.shared.factor)
+		let on = ScrollBoost.shared.active
+		scrollStatus.stringValue = (on && ScrollBoost.shared.unavailable) ? "需要辅助功能权限" : ""
+	}
+
+	private static func factorText(_ v: Double) -> String { String(format: "%.0f×", v.rounded()) }
 
 	// MARK: NSTableView
 

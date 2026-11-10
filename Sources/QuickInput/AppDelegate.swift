@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 		Store.shared.load()
 		HotKeyCenter.shared.reload()
+		ScrollBoost.shared.refresh()
 		AuthAssist.shared.start()
 
 		statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)

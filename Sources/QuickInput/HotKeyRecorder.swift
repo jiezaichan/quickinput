@@ -7,6 +7,7 @@ final class HotKeyRecorder: NSView {
 
 	private let label = NSTextField(labelWithString: "未设置")
 	private var monitor: Any?
+	private var closeObserver: NSObjectProtocol?
 	private var keyCode: UInt32?
 	private var modifiers: UInt32 = 0
 	private var recording = false { didSet { refresh() } }
@@ -32,7 +33,7 @@ final class HotKeyRecorder: NSView {
 	}
 
 	private func refresh() {
-		label.stringValue = recording ? "按下组合键…（esc 取消，⌫ 清除）"
+		label.stringValue = recording ? "按下组合键或侧键…（esc 取消，⌫ 清除）"
 		                              : Keys.describe(keyCode: keyCode, modifiers: modifiers)
 		label.textColor = recording ? .secondaryLabelColor : .labelColor
 		needsDisplay = true
@@ -55,8 +56,30 @@ final class HotKeyRecorder: NSView {
 
 	private func startRecording() {
 		recording = true
-		monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] ev in
+		// 录制期间放行全局侧键，免得按下已绑定的侧键又触发一遍动作
+		HotKeyCenter.shared.mouseTapSuspended = true
+		// 直接关掉设置窗口也要恢复，不能让侧键一直处于放行状态
+		if let w = window {
+			closeObserver = NotificationCenter.default.addObserver(
+				forName: NSWindow.willCloseNotification, object: w, queue: .main
+			) { [weak self] _ in self?.stopRecording() }
+		}
+		monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged, .otherMouseDown]) { [weak self] ev in
 			guard let self = self else { return ev }
+
+			if ev.type == .otherMouseDown {
+				// 只收侧键（buttonNumber 3 / 4），中键、右键照常交给窗口
+				let button = Int64(ev.buttonNumber)
+				guard button >= 3 else { return ev }
+				let code = Keys.mouseKey(button)
+				let m = Keys.carbonModifiers(from: ev.modifierFlags.intersection(.deviceIndependentFlagsMask))
+				self.keyCode = code
+				self.modifiers = m
+				self.stopRecording()
+				self.onChange?(code, m)
+				return nil
+			}
+
 			guard ev.type == .keyDown else { return nil }
 
 			let code = UInt32(ev.keyCode)
@@ -90,6 +113,9 @@ final class HotKeyRecorder: NSView {
 	private func stopRecording() {
 		if let m = monitor { NSEvent.removeMonitor(m) }
 		monitor = nil
+		if let o = closeObserver { NotificationCenter.default.removeObserver(o) }
+		closeObserver = nil
 		recording = false
+		HotKeyCenter.shared.mouseTapSuspended = false
 	}
 }
